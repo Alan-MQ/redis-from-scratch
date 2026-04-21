@@ -9,6 +9,7 @@ const (
 	bulkStringResult
 	nullBulkStringResult
 	integerResult
+	arrayResult
 	errorResult
 )
 
@@ -17,6 +18,7 @@ type Result struct {
 	kind    resultKind
 	text    string
 	integer int64
+	items   []Result
 }
 
 func SimpleStringResult(text string) Result {
@@ -46,6 +48,13 @@ func IntegerResult(value int64) Result {
 	}
 }
 
+func ArrayResult(items []Result) Result {
+	return Result{
+		kind:  arrayResult,
+		items: items,
+	}
+}
+
 func ErrorResult(text string) Result {
 	return Result{
 		kind: errorResult,
@@ -64,6 +73,12 @@ func (result Result) Encode() []byte {
 		return []byte("$-1\r\n")
 	case integerResult:
 		return []byte(fmt.Sprintf(":%d\r\n", result.integer))
+	case arrayResult:
+		payload := fmt.Sprintf("*%d\r\n", len(result.items))
+		for _, item := range result.items {
+			payload += string(item.Encode())
+		}
+		return []byte(payload)
 	case errorResult:
 		return []byte("-" + result.text + "\r\n")
 	default:

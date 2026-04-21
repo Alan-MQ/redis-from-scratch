@@ -62,7 +62,6 @@ func (list *RedisList) LPush(value RedisValue) {
 	if list.Tail == nil {
 		list.Tail = newNode
 	}
-	return
 }
 
 // TODO: Alan 实现尾部插入操作 (对应Redis的RPUSH)
@@ -89,7 +88,6 @@ func (list *RedisList) RPush(value RedisValue) {
 	list.Tail = newNode
 	list.Head = newNode
 	list.Length = 1
-	return
 }
 
 // TODO: Alan 实现头部弹出操作 (对应Redis的LPOP)
@@ -117,23 +115,27 @@ func (list *RedisList) LPop() RedisValue {
 		return res
 	}
 	list.Head = list.Head.Next
+	list.Head.Prev = nil
 	return res
 }
 
 // TODO: Alan 实现尾部弹出操作 (对应Redis的RPOP)
 // 要求：类似LPop，但操作tail端
 func (list *RedisList) RPop() RedisValue {
-	// TODO: Alan 实现
 	if list.Tail == nil {
 		return nil
 	}
-	list.Length -= 1
+
 	res := list.Tail.Value
-	if list.Length == 1 {
+
+	if list.Head == list.Tail {
 		list.Head = nil
 		list.Tail = nil
+		list.Length = 0
 		return res
 	}
+
+	list.Length -= 1
 	list.Tail = list.Tail.Prev
 	list.Tail.Next = nil
 	return res
@@ -152,7 +154,7 @@ func (list *RedisList) LIndex(index int) RedisValue {
 	// - 路径优化：从头还是从尾开始遍历？
 	// - 遍历到目标位置
 
-	if list.Length == 0 || index > list.Length || index < (-1*list.Length) {
+	if list.Length == 0 || index >= list.Length || index < (-1*list.Length) {
 		return nil
 	}
 	if index < 0 {
@@ -223,10 +225,10 @@ func (list *RedisList) Clear() {
 // 3. 超出范围自动调整
 // 4. start > stop时返回空列表
 func (list *RedisList) LRange(start, stop int) []RedisValue {
-	// 提示：
-	// - 类似SDS的Substr，处理负数索引
-	// - 边界调整和检
-	// - 遍历收集元素
+	if list == nil || list.Length == 0 {
+		return []RedisValue{}
+	}
+
 	if start < 0 {
 		start = list.Length + start
 	}
@@ -237,34 +239,28 @@ func (list *RedisList) LRange(start, stop int) []RedisValue {
 	if start < 0 {
 		start = 0
 	}
+	if stop < 0 || start >= list.Length {
+		return []RedisValue{}
+	}
 	if stop >= list.Length {
 		stop = list.Length - 1
 	}
 
 	if start > stop {
-		return nil
+		return []RedisValue{}
 	}
-	res := make([]RedisValue, stop-start+1)
-	i := 0
-	if start < list.Length-stop {
-		curr := list.Head
-		for p := 0; p <= stop; p++ {
-			if p >= start {
-				res[i] = curr.Value
-				i++
-			}
-			curr = curr.Next
-		}
-	} else {
-		curr := list.Tail
-		for p := list.Length; p >= start; p-- {
-			if p >= stop {
-				res[i] = curr.Value
-				i++
-			}
-			curr = curr.Prev
-		}
+
+	curr := list.Head
+	for i := 0; i < start; i++ {
+		curr = curr.Next
 	}
+
+	res := make([]RedisValue, 0, stop-start+1)
+	for i := start; i <= stop && curr != nil; i++ {
+		res = append(res, curr.Value)
+		curr = curr.Next
+	}
+
 	return res
 }
 

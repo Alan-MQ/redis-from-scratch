@@ -37,14 +37,14 @@ func (t ValueType) String() string {
 type RedisValue interface {
 	Type() ValueType
 	String() string
-	Size() int64  // 占用内存大小（字节）
+	Size() int64 // 占用内存大小（字节）
 }
 
 // Redis对象，包装值和元数据
 type RedisObject struct {
-	Value      RedisValue    // 实际数据
-	ExpireTime *time.Time    // 过期时间，nil表示不过期
-	LastAccess time.Time     // 最后访问时间（用于LRU）
+	Value      RedisValue // 实际数据
+	ExpireTime *time.Time // 过期时间，nil表示不过期
+	LastAccess time.Time  // 最后访问时间（用于LRU）
 }
 
 // 创建新的Redis对象
@@ -53,6 +53,35 @@ func NewRedisObject(value RedisValue) *RedisObject {
 		Value:      value,
 		LastAccess: time.Now(),
 	}
+}
+
+// Type 让 RedisObject 也能作为 Dict 中的 value 使用。
+func (obj *RedisObject) Type() ValueType {
+	if obj == nil || obj.Value == nil {
+		return ValueType(-1)
+	}
+	return obj.Value.Type()
+}
+
+// String 返回底层值的字符串表示。
+func (obj *RedisObject) String() string {
+	if obj == nil || obj.Value == nil {
+		return ""
+	}
+	return obj.Value.String()
+}
+
+// Size 估算对象自身和底层值的占用。
+func (obj *RedisObject) Size() int64 {
+	if obj == nil {
+		return 0
+	}
+
+	size := int64(32)
+	if obj.Value != nil {
+		size += obj.Value.Size()
+	}
+	return size
 }
 
 // 检查是否过期
@@ -80,7 +109,7 @@ func (obj *RedisObject) Info() string {
 	if obj.ExpireTime != nil {
 		expire = obj.ExpireTime.Format("2006-01-02 15:04:05")
 	}
-	
-	return fmt.Sprintf("Type: %s, Size: %d bytes, Expire: %s", 
+
+	return fmt.Sprintf("Type: %s, Size: %d bytes, Expire: %s",
 		obj.Value.Type(), obj.Value.Size(), expire)
 }

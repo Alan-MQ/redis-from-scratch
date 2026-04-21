@@ -1,9 +1,15 @@
 package server
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
+
+	"redis-from-scratch/src/command"
+	"redis-from-scratch/src/network"
+	"redis-from-scratch/src/storage"
 )
 
 type Config struct {
@@ -12,19 +18,13 @@ type Config struct {
 }
 
 type Server struct {
-	config   *Config
-	listener net.Listener
-	clients  map[string]*Client
-	mutex    sync.RWMutex
-	shutdown chan struct{}
-	// storage        *storage.Engine
-	// commandHandler *command.Handler
-
-	// TODO: Alan 添加数据存储引擎
-	// storage *storage.Engine
-
-	// TODO: Alan 添加命令处理器
-	// commandHandler *command.Handler
+	config         *Config
+	listener       net.Listener
+	clients        map[string]*Client
+	mutex          sync.RWMutex
+	shutdown       chan struct{}
+	storage        *storage.Engine
+	commandHandler *command.Handler
 }
 
 type Client struct {
@@ -34,10 +34,14 @@ type Client struct {
 }
 
 func New(config *Config) *Server {
+	engine := storage.NewEngine()
+
 	return &Server{
-		config:   config,
-		clients:  make(map[string]*Client),
-		shutdown: make(chan struct{}),
+		config:         config,
+		clients:        make(map[string]*Client),
+		shutdown:       make(chan struct{}),
+		storage:        engine,
+		commandHandler: command.NewHandler(engine),
 	}
 }
 
@@ -92,39 +96,32 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	fmt.Printf("✅ Client connected: %s\n", clientID)
 
-	// TODO: Alan 实现RESP协议解析和命令处理
-	// 这里现在只是一个占位符，返回简单的PONG响应
-	buffer := make([]byte, 1024)
+	parser := network.NewParser(conn)
 	for {
-		n, err := conn.Read(buffer)
+		args, err := parser.ReadCommand()
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			fmt.Printf("❌ Parse error from %s: %v\n", clientID, err)
+			if _, writeErr := conn.Write(command.ErrorResult(err.Error()).Encode()); writeErr != nil {
+				break
+			}
+
+			// 解析失败时，当前连接里的字节流状态可能已经不一致，直接断开最安全。
 			break
 		}
 
-		// 		RESP 用不同的首字母标记不同类型，后面跟 \r\n（CRLF）结束。常见类型（RESP2）：
-		// Simple String（简单字符串）
-		// 前缀 +，直到 CRLF 的文本（通常用于状态回复）。例：+OK\r\n
-		// Error（错误）
-		// 前缀 -，直到 CRLF 的错误文本。例：-ERR unknown command 'FOO'\r\n
-		// Integer（整数）
-		// 前缀 :，直到 CRLF 的十进制整数。例：:1000\r\n
-		// Bulk String（批量字符串，二进制安全）
-		// 前缀 $ 接长度 \r\n，然后是精确的 N 字节数据，再跟一个 \r\n。
-		// 例：$6\r\nfoobar\r\n（数据是 6 字节 foobar）
-		// 空字符串：$0\r\n\r\n
-		// Null（nil）：$-1\r\n（表示没有值）
-		// Array（数组 / 多批量）
-		// 前缀 * 接元素个数 \r\n，然后按顺序写每个元素（元素可以是任意 RESP 类型，支持嵌套）。
-		// 例：*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n
-		// Null array：*-1\r\n
-		command := string(buffer[:n])
-		fmt.Printf("📨 Received: %s from %s\n", command, clientID)
+		fmt.Printf("📨 Received args: %v from %s\n", args, clientID)
 
-		// 简单的PING-PONG响应
-		if command == "PING\r\n" {
-			conn.Write([]byte("+PONG\r\n"))
-		} else {
-			conn.Write([]byte("-ERR unknown command\r\n"))
+		result, execErr := s.commandHandler.Execute(args)
+		if _, err := conn.Write(result.Encode()); err != nil {
+			break
+		}
+
+		if execErr != nil {
+			fmt.Printf("🧠 Learning TODO for %s: %v\n", clientID, execErr)
 		}
 	}
 

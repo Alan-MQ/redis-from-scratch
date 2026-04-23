@@ -34,55 +34,66 @@
 - [x] **List - 双向链表** ✅ 已完成
   - [x] O(1)双端操作 (LPUSH/RPUSH/LPOP/RPOP)
   - [x] 支持负数索引的LINDEX
-  - [x] 智能双向遍历优化
-- [ ] **Set - 哈希表实现** 🟡 学习中
+  - [x] LRANGE范围查询与边界修复
+- [x] **Set - 哈希表实现** ✅ 已完成基础版
   - [x] 哈希表基础理论学习
-  - [ ] 链表法冲突处理实现
-  - [ ] 动态扩容机制
+  - [x] 链表法冲突处理实现
+  - [x] 渐进式rehash基础骨架
+  - [x] Dict/Set 在 rehash 期间的读写正确性
   - [ ] 集合运算 (并集/交集/差集)
-- [ ] Hash - 渐进式rehash  
+- [ ] Hash - 基于 Dict 的 Redis Hash
 - [ ] Sorted Set - 跳跃表 + 哈希表
 
 **已完成TODO**:
 ```go
 ✅ Alan 实现SDS动态字符串，包含内存对齐优化
 ✅ Alan 实现双向链表的完整操作集
-✅ Alan 掌握指针操作和边界条件处理
+✅ Alan 修复链表边界和指针一致性问题
+✅ Alan 实现 Dict 渐进式 rehash 基础逻辑
+✅ Alan 基于 Dict 封装 Redis Set
 ```
 
 **当前TODO**:
 ```go
-🟡 Alan 学习哈希表基础理论
-🟡 Alan 实现基础哈希表结构
+🟡 Alan 基于 Dict 实现 Redis Hash 结构
+🟡 Alan 为 Set/Hash 补齐更完整的命令语义
+🟡 Alan 预习 Sorted Set 需要的“有序 + 快速查找”双结构设计
 ```
 
 **学习重点**:
 - ✅ 理解Redis数据结构设计哲学
 - ✅ 掌握内存效率vs时间效率的权衡  
-- ✅ 学会双向链表的指针操作精髓
-- 🟡 理解哈希函数和冲突处理机制
-- 🟡 掌握动态扩容的设计考量
+- ✅ 理解双向链表在命令语义中的落地方式
+- ✅ 理解哈希函数、冲突处理、渐进式 rehash
+- 🟡 从 Dict 过渡到 Hash/Set 命令层设计
+- 🟡 为跳跃表和 zset 做知识准备
 
 ---
 
-### 阶段2: 命令解析器与执行器 (2-3天)  
+### 阶段2: 命令解析器与执行器 (2-3天) - ✅ 已完成基础版
 **目标**: 实现RESP协议和命令分发系统
-- [ ] RESP协议编码/解码
-- [ ] 命令解析和路由
-- [ ] 基础命令实现(GET/SET/DEL等)
-- [ ] 错误处理机制
+- [x] RESP2 基础解析（inline + array + bulk string）
+- [x] 命令解析和路由
+- [x] 基础命令实现（PING/SET/GET/DEL）
+- [x] List 命令接线（LPUSH/RPUSH/LPOP/RPOP/LRANGE）
+- [x] WRONGTYPE 与 nil bulk string 等基础错误/空值语义
+- [ ] RESP 更完整数据类型支持（simple string / integer / error 的请求侧扩展）
+- [ ] 通用命令（EXISTS/TYPE/LLEN/LINDEX 等）持续补齐
 
 **关键TODO**:
 ```go
-// TODO: Alan 实现RESP协议解析器，处理各种数据类型
-// TODO: Alan 设计命令分发器，支持动态注册
-// TODO: Alan 实现命令的原子性保证
+// ✅ Alan 已完成 RESP argv 解析通路
+// ✅ Alan 已完成命令分发器基础版本
+// 🟡 Alan 继续补充更多 Redis 命令与统一错误语义
+// 🟡 Alan 为未来 pipeline / 多命令请求预留命令执行模型
 ```
 
 **学习重点**:
-- 协议设计的简洁性原则
-- 命令执行的原子性
-- 错误处理的一致性
+- ✅ 协议设计的简洁性原则
+- ✅ argv 是 Redis 命令执行的核心抽象
+- ✅ 错误处理和空值语义的一致性
+- 🟡 命令族扩展时如何保持对象模型清晰
+- 🟡 为 pipeline 和事务做命令执行模型准备
 
 ---
 
@@ -245,8 +256,90 @@
 
 ---
 
-## 📋 下一步行动
-1. ✅ 确认Go开发环境
-2. ✅ 完成阶段0的项目初始化
-3. 开始阶段1的基础数据结构实现
-4. 每完成一个阶段进行总结和回顾
+## 📍 当前真实进度
+
+从代码现状看，我们已经完成了下面这些里程碑：
+
+1. **基础数据结构层**
+   - SDS、RedisList、Dict、RedisSet 已经有可运行实现
+   - Dict 支持基础渐进式 rehash 骨架与测试
+2. **命令执行主通路**
+   - `socket -> RESP parser -> argv -> handler -> storage -> RESP response` 已打通
+   - 已支持 `PING/SET/GET/DEL/LPUSH/RPUSH/LPOP/RPOP/LRANGE`
+3. **对象模型**
+   - `RedisObject` 已接入存储层
+   - 已有基础类型检查与 `WRONGTYPE` 语义
+4. **测试习惯**
+   - 核心模块已形成“先写骨架 + 测试路标 + 实现补齐”的学习节奏
+
+这意味着项目已经不是“只有 PING 的 toy server”，而是进入了“真正开始长出 Redis 语义”的阶段。
+
+---
+
+## 🛣️ 接下来最推荐的路线
+
+### 路线A: 先补 Hash 命令层（最推荐）
+**为什么最顺**:
+- 你已经有 Dict，这一步是最自然的复用
+- Hash 是 Redis 里非常典型的“对象类型 + 命令族”练习
+- 会让你更熟悉 Redis 的类型系统，而不是继续陷在链表细节里
+
+**建议目标**:
+- [ ] 实现 `RedisHash` 结构
+- [ ] 接入 `HSET/HGET/HDEL/HEXISTS/HGETALL`
+- [ ] 统一 WRONGTYPE / nil / integer reply 语义
+
+**你会重点学到**:
+- Dict 如何作为更高层 Redis 类型的底座
+- Redis 命令返回值为什么经常不是简单的 OK/ERR
+- 一个数据结构如何演化成一整个命令族
+
+### 路线B: 再做过期语义（非常 Redis）
+**为什么值得紧跟其后**:
+- 你已经有 `RedisObject.ExpireTime`
+- 这是 Redis 区别于“普通内存 KV” 的关键特性之一
+
+**建议目标**:
+- [ ] 实现 `EXPIRE/TTL`
+- [ ] 读路径上的被动过期（lazy expiration）
+- [ ] 为后续主动过期清理留下接口
+
+**你会重点学到**:
+- Redis 的 key 生命周期管理
+- “对象元数据”如何影响命令执行
+- 正确性和性能之间的权衡
+
+### 路线C: 补一批通用命令，夯实对象模型
+**建议目标**:
+- [ ] `TYPE`
+- [ ] `EXISTS`
+- [ ] `LLEN/LINDEX`
+- [ ] `SADD/SREM/SMEMBERS` 真正接到 handler
+
+**作用**:
+- 让当前 server 更像一个“能玩的 Redis”
+- 为之后 redis-cli 手工测试提供更好体验
+
+### 路线D: 再往网络层深入
+**建议目标**:
+- [ ] 客户端状态管理
+- [ ] 多命令连续请求
+- [ ] pipeline 支持
+- [ ] 更健壮的连接异常处理
+
+**为什么不放最前面**:
+- 现在最缺的不是网络壳子，而是 Redis 语义的厚度
+- 先把类型和命令补厚，再做 pipeline 会更有感觉
+
+---
+
+## ✅ 我的建议
+
+下一步优先做：
+
+1. **Hash 类型 + HSET/HGET/HDEL/HEXISTS/HGETALL**
+2. **EXPIRE/TTL + 被动过期**
+3. **TYPE/EXISTS/LLEN/LINDEX/SADD 等通用命令补齐**
+4. **然后再进入 pipeline / 客户端状态管理**
+
+这个顺序更贴近“先学 Redis 自己的语义，再学 Redis 外面的壳子”。

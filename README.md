@@ -85,8 +85,11 @@ go test ./src/server -v
 - [x] 项目框架搭建
 - [x] 基础服务器实现 
 - [x] PING/PONG基本功能
-- [ ] RESP协议完整实现
-- [ ] 核心数据结构实现
+- [x] RESP2 基础解析与命令路由
+- [x] String/List/Dict/Set 基础实现
+- [x] SET/GET/DEL 与 List 命令主通路打通
+- [ ] Hash / Sorted Set / 更完整命令族
+- [ ] 过期语义与持久化
 
 ## 📖 文档
 
